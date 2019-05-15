@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <title>Hello, world!</title>
+  </head>
+  <body>
+    
+    <div class="container" style="margin:2em auto;max-width:420px;">
+        <div style="height:180px;width:180px;border:1px solid grey;margin:1em auto;">
+            <img src="" id="orgImage" alt="uploaded image will be here!" width="100%" height="100%" style="display:none;"/><br/>
+        </div>
+        <div class="custom-file">
+            <input type="file" class="custom-file-input" id="imageuploadbtn" required>
+            <label class="custom-file-label" for="imageuploadbtn">Choose file...</label>
+            <div class="invalid-feedback">Example invalid custom file feedback</div>
+        </div>
+    </div>
+
+
+    <!-- Button trigger modal -->
+    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#exampleModal" style="display:none;">
+    Launch demo modal
+    </button>
+
+    <!-- Modal -->
+    <div class="modal fade" id="cropModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="exampleModalLabel">Crop Image</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <div class="modal-body text-center">
+            <canvas id="imageManipulator" width="600" height="600" style="border:1px solid #000000;margin:auto;" data-image='orgImage' 
+                data-file='imageuploadbtn' data-output="orgImage" data-cropheight="360" data-cropwidth="360" data-cropbtn="cropImage"></canvas>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="cropImage" >Crop Image</button>
+        </div>
+        </div>
+    </div>
+    </div>
+
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+    <script>
+    /* image manipulation library */
+    (function(global, doc, $, undefined){
+        "use strict";
+        var canvas, ctx, imageId, inputId, canvasWidth, canvasHeight;
+        var topShad = {}, leftShad = {}, rightShad = {}, bottomShad = {};
+        var cropRect = {'x': 20, 'y': 20, 'width': 0, 'height': 0};
+        var mouseDown, mouseMovedDiff;
+        var mouseDownFlag = false;
+        var cropWidth, cropHeight, cropImageBtn;
+
+        /* draw rect */
+        function drawRect (obj) {
+            ctx.beginPath();
+            ctx.lineWidth = "1";
+            ctx.strokeStyle = "red";
+            ctx.fillStyle = 'rgba(225,225,225,0.7)';
+            ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+        }
+
+        /* show a cropper on image */
+        function makeCropper () {
+            topShad = {'x' : 0, 'y': 0, 'width':canvasWidth, 'height':cropRect.y};
+            leftShad = {'x' : 0, 'y': cropRect.y, 'width':cropRect.x, 'height':canvasHeight};
+            rightShad = {'x' : cropRect.x + cropRect.width, 'y': topShad.height, 'width':canvasWidth - (cropRect.x + cropRect.width), 'height':canvasHeight};
+            bottomShad = {'x' : cropRect.x, 'y': cropRect.y + cropRect.height, 'width':cropRect.width, 'height':canvasHeight};
+            drawRect(topShad);
+            drawRect(leftShad);
+            drawRect(rightShad);
+            drawRect(bottomShad);
+            ctx.beginPath();
+            ctx.lineWidth = "1";
+            ctx.strokeStyle = "white";
+            ctx.rect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
+            ctx.stroke();
+        }
+
+        /* creates variable and make environment to work with */
+        function makeCanvas () {
+            canvas = document.getElementById("imageManipulator");
+            ctx = canvas.getContext("2d");
+            imageId = canvas.getAttribute("data-image");
+            inputId = canvas.getAttribute("data-file");
+            canvasWidth = canvas.getAttribute("width");
+            canvasHeight = canvas.getAttribute("height");
+            cropWidth = +canvas.getAttribute("data-cropwidth");
+            cropHeight = +canvas.getAttribute("data-cropheight");
+            cropRect.width = cropWidth;
+            cropRect.height = cropHeight;
+            cropImageBtn = canvas.getAttribute('data-cropbtn');
+            document.getElementById(inputId).addEventListener('click',function(e){
+                e.target.value = '';
+            })
+            /* read file and show in image box */
+            document.getElementById(inputId).addEventListener("change", function(e){
+                var input = e.target;
+                if (input.files && input.files[0]) {
+                    /* to check image size, we need 360 by 360 */
+                    var img = new Image();
+                    img.onload = function(){
+                        console.log(this.width + " " + this.height);
+                    };
+                    img.src = window.URL.createObjectURL(input.files[0]);
+
+                    /* upload image for preview */
+                    var reader = new FileReader();
+                    reader.onload = function(e){
+                        document.getElementById(imageId).setAttribute('src', e.target.result);
+                    };
+                    reader.readAsDataURL(input.files[0]);
+                    
+                    /* show modal for cropper */
+                    $("#cropModal").modal({
+                        show : true,
+                        keyboard : false,
+                        backdrop : 'static'
+                    });
+                    /*canvas.style.display = 'block';                
+                    document.getElementById(cropImageBtn).style.display = 'block';*/
+                }
+            });
+            document.getElementById(imageId).addEventListener("load",function(e){
+                var image = e.target;
+                image.style.display = 'block';
+                //ctx.drawImage(image, 0, 0, canvasWidth, canvasHeight);
+                ctx.drawImage(image, 0, 0);
+                makeCropper();
+            });
+            canvas.addEventListener("mousedown", function(e){
+                mouseDownFlag = true;
+                mouseDown = {'clientX' : e.clientX, 'clientY' : e.clientY};
+            });
+            canvas.addEventListener("mousemove", function(e){
+                if (mouseDownFlag) {
+                    mouseMovedDiff = {'x' : e.clientX - mouseDown.clientX, 'y' : e.clientY - mouseDown.clientY};
+                }
+            });
+            canvas.addEventListener("mouseup", function(e){
+                mouseDownFlag = false;
+                cropRect['x'] = cropRect['x'] + mouseMovedDiff.x;
+                cropRect['y'] = cropRect['y'] + mouseMovedDiff.y;
+                if (cropRect['y'] + cropHeight > canvasHeight) cropRect['y'] = canvasHeight - cropHeight;
+                if (cropRect['x'] + cropWidth > canvasWidth) cropRect['x'] = canvasWidth - cropWidth;
+                if (cropRect['x'] < 0) cropRect['x'] = 0;
+                if (cropRect['y'] < 0) cropRect['y'] = 0;
+                if ("createEvent" in document) {
+                    var evt = document.createEvent("HTMLEvents");
+                    evt.initEvent("change", false, true);
+                    document.getElementById(inputId).dispatchEvent(evt);
+                }
+                else {
+                    document.getElementById(inputId).fireEvent("onchange");
+                }
+            });
+            document.getElementById(cropImageBtn).addEventListener("click",function(e){
+                ctx.drawImage(document.getElementById(imageId), cropRect.x, cropRect.y, cropRect.width, cropRect.height, 0, 0, canvasWidth, canvasHeight);
+                document.getElementById(canvas.getAttribute('data-output')).setAttribute('src', canvas.toDataURL("image/png"));
+                ctx.clearRect(0,0,canvasWidth,canvasHeight);
+                document.getElementById(inputId).style.display = 'none';
+                $("#cropModal").modal('hide');
+                /*canvas.style.display = 'none';                
+                e.target.style.display = 'none';*/
+            });
+        }
+
+        /* starts the script */
+        function init () {
+            makeCanvas();
+        }
+
+        init();
+
+    })(window, document, jQuery);
+    </script>
+
+  </body>
+</html>
